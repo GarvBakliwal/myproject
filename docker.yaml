@@ -1,6 +1,7 @@
 ---
 - name: Launch Docker Container
   hosts: prod
+  become: yes
   vars:
     docker_image: "garvbakliwal/docker-jenkins-project"
     docker_tag: "latest"
@@ -8,20 +9,20 @@
     host_port: "80"
     container_port: "80"
   tasks:
-    - name: Check if the container is already running
-      docker_container:
-        name: "{{ container_name }}"
-        state: absent
-      register: container_stats
-      ignore_errors: yes
-
     - name: Remove old container if it exists
       docker_container:
         name: "{{ container_name }}"
         state: absent
+        force_kill: yes
 
-    - name: Remove all Docker images
-      shell: docker rmi -f $(docker images -qa)
+    - name: Remove all Docker images if they exist
+      shell: |
+        images=$(docker images -qa)
+        if [ -n "$images" ]; then
+          docker rmi -f $images
+        fi
+      args:
+        executable: /bin/bash
       ignore_errors: yes
 
     - name: Pull the Docker image
@@ -36,3 +37,11 @@
         image: "{{ docker_image }}:{{ docker_tag }}"
         state: started
         published_ports: "{{ host_port }}:{{ container_port }}"
+
+    - name: Show running containers
+      shell: docker ps
+      register: docker_ps_output
+
+    - name: Display container list
+      debug:
+        var: docker_ps_output.stdout_lines
